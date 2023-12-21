@@ -352,41 +352,30 @@ SPI3_HOST = 2
 ////////////////////////////////////////////////////////////////////////////////////////
 #if defined (TFT_PARALLEL_8_BIT)
 
-  #if (TFT_D0 >= 32) // If D0 is a high GPIO assume all other data bits are high GPIO
-    #define MASK_OFFSET 32
-    #define GPIO_CLR_REG GPIO.out1_w1tc.val
-    #define GPIO_SET_REG GPIO.out1_w1ts.val
-  #else
+   // If D0 is a high GPIO assume all other data bits are high GPIO
+    #define MASK_OFFSETH 32
+    #define GPIO_CLR_REGH GPIO.out1_w1tc.val
+    #define GPIO_SET_REGH GPIO.out1_w1ts.val
+  
     #define MASK_OFFSET 0
     #define GPIO_CLR_REG GPIO.out_w1tc
     #define GPIO_SET_REG GPIO.out_w1ts
-  #endif
+  
 
   // Create a bit set lookup table for data bus - wastes 1kbyte of RAM but speeds things up dramatically
   // can then use e.g. GPIO.out_w1ts = set_mask(0xFF); to set data bus to 0xFF
-  #define PARALLEL_INIT_TFT_DATA_BUS               \
-  for (int32_t c = 0; c<256; c++)                  \
-  {                                                \
-    xset_mask[c] = 0;                              \
-    if ( c & 0x01 ) xset_mask[c] |= (1 << (TFT_D0-MASK_OFFSET)); \
-    if ( c & 0x02 ) xset_mask[c] |= (1 << (TFT_D1-MASK_OFFSET)); \
-    if ( c & 0x04 ) xset_mask[c] |= (1 << (TFT_D2-MASK_OFFSET)); \
-    if ( c & 0x08 ) xset_mask[c] |= (1 << (TFT_D3-MASK_OFFSET)); \
-    if ( c & 0x10 ) xset_mask[c] |= (1 << (TFT_D4-MASK_OFFSET)); \
-    if ( c & 0x20 ) xset_mask[c] |= (1 << (TFT_D5-MASK_OFFSET)); \
-    if ( c & 0x40 ) xset_mask[c] |= (1 << (TFT_D6-MASK_OFFSET)); \
-    if ( c & 0x80 ) xset_mask[c] |= (1 << (TFT_D7-MASK_OFFSET)); \
-  }                                                              \
-
+  #define PARALLEL_INIT_TFT_DATA_BUS
   // Mask for the 8 data bits to set pin directions
-  #define GPIO_DIR_MASK ((1 << (TFT_D0-MASK_OFFSET)) | (1 << (TFT_D1-MASK_OFFSET)) | (1 << (TFT_D2-MASK_OFFSET)) | (1 << (TFT_D3-MASK_OFFSET)) | (1 << (TFT_D4-MASK_OFFSET)) | (1 << (TFT_D5-MASK_OFFSET)) | (1 << (TFT_D6-MASK_OFFSET)) | (1 << (TFT_D7-MASK_OFFSET)))
+  #define GPIO_DIR_MASK ((1 << (TFT_D0-MASK_OFFSET)) | (1 << (TFT_D2-MASK_OFFSET)) | (1 << (TFT_D3-MASK_OFFSET)) | (1 << (TFT_D4-MASK_OFFSET)) | (1 << (TFT_D5-MASK_OFFSET)) | (1 << (TFT_D6-MASK_OFFSET)) | (1 << (TFT_D7-MASK_OFFSET)))
+  #define GPIO_DIR_MASKH ( (1 << (TFT_D1-MASK_OFFSETH)) )
 
   #if (TFT_WR >= 32)
     #if (TFT_D0 >= 32)
       // Data bits and the write line are cleared to 0 in one step (1.25x faster)
-      #define GPIO_OUT_CLR_MASK (GPIO_DIR_MASK | (1 << (TFT_WR-32)))
+     
     #elif (TFT_D0 >= 0)
       // Data bits and the write line are cleared sequentially
+      #define GPIO_OUT_CLR_MASKH (GPIO_DIR_MASKH | (1 << (TFT_WR-32)));
       #define GPIO_OUT_CLR_MASK (GPIO_DIR_MASK); WR_L
     #endif
   #elif (TFT_WR >= 0)
@@ -402,23 +391,25 @@ SPI3_HOST = 2
   #endif
 
   // A lookup table is used to set the different bit patterns, this uses 1kByte of RAM
-  #define set_mask(C) xset_mask[C] // 63fps Sprite rendering test 33% faster, graphicstest only 1.8% faster than shifting in real time
+  //#define set_mask(C) xset_mask[C] // 63fps Sprite rendering test 33% faster, graphicstest only 1.8% faster than shifting in real time
 
   // Real-time shifting alternative to above to save 1KByte RAM, 47 fps Sprite rendering test
-  /*#define set_mask(C) (((C)&0x80)>>7)<<TFT_D7 | (((C)&0x40)>>6)<<TFT_D6 | (((C)&0x20)>>5)<<TFT_D5 | (((C)&0x10)>>4)<<TFT_D4 | \
-                        (((C)&0x08)>>3)<<TFT_D3 | (((C)&0x04)>>2)<<TFT_D2 | (((C)&0x02)>>1)<<TFT_D1 | (((C)&0x01)>>0)<<TFT_D0
-  //*/
-
+  #define set_mask(C) (((C)&0x80)>>7)<<TFT_D7 | (((C)&0x40)>>6)<<TFT_D6 | (((C)&0x20)>>5)<<TFT_D5 | (((C)&0x10)>>4)<<TFT_D4 | \
+                        (((C)&0x08)>>3)<<TFT_D3 | (((C)&0x04)>>2)<<TFT_D2 | (((C)&0x01)>>0)<<TFT_D0
+  
+   #define set_maskh(C) (((C)&0x02)>>1)<<TFT_D1-32 
   // Write 8 bits to TFT
-  #define tft_Write_8(C)  GPIO_CLR_REG =  GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t)(C)); WR_H
+  #define tft_Write_8(C)  GPIO_CLR_REG =  GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t)(C)); GPIO_CLR_REGH =  GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t)(C)); WR_H
 
   #if defined (SSD1963_DRIVER)
 
     // Write 18-bit color to TFT
     #define tft_Write_16(C) GPIO.out_w1tc = GPIO_OUT_CLR_MASK; GPIO.out_w1ts = set_mask((uint8_t) (((C) & 0xF800)>> 8)); WR_H; \
                             GPIO.out_w1tc = GPIO_OUT_CLR_MASK; GPIO.out_w1ts = set_mask((uint8_t) (((C) & 0x07E0)>> 3)); WR_H; \
-                            GPIO.out_w1tc = GPIO_OUT_CLR_MASK; GPIO.out_w1ts = set_mask((uint8_t) (((C) & 0x001F)<< 3)); WR_H
-
+                            GPIO.out_w1tc = GPIO_OUT_CLR_MASK; GPIO.out_w1ts = set_mask((uint8_t) (((C) & 0x001F)<< 3)); WR_H; \
+                            GPIO.out1_w1tc = GPIO_OUT_CLR_MASKH; GPIO.out1_w1ts = set_maskh((uint8_t) (((C) & 0xF800)>> 8)); WR_H; \
+                            GPIO.out1_w1tc = GPIO_OUT_CLR_MASKH; GPIO.out1_w1ts = set_maskh((uint8_t) (((C) & 0x07E0)>> 3)); WR_H; \
+                            GPIO.out1_w1tc = GPIO_OUT_CLR_MASKH; GPIO.out1_w1ts = set_maskh((uint8_t) (((C) & 0x001F)<< 3)); WR_H
     // 18-bit color write with swapped bytes
     #define tft_Write_16S(C) Cswap = ((C) >>8 | (C) << 8); tft_Write_16(Cswap)
 
@@ -430,34 +421,49 @@ SPI3_HOST = 2
       #define tft_Write_16S(C) GPIO.out_w1tc = GPIO_OUT_CLR_MASK; GPIO.out_w1ts = set_mask((uint8_t) ((C) >> 8)); WR_H
     #else
       // Write 16 bits to TFT
-      #define tft_Write_16(C) GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 8)); WR_H; \
-                              GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 0)); WR_H
+      #define tft_Write_16(C) GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 8));  \
+                              GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >> 8)); WR_H; \
+                              GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 0));  \
+                              GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >> 0)); WR_H
 
       // 16-bit write with swapped bytes
-      #define tft_Write_16S(C) GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 0)); WR_H; \
-                               GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 8)); WR_H
+      #define tft_Write_16S(C) GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 0)); \
+                               GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >> 0)); WR_H; \
+                               GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 8));  \
+                               GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >> 8)); WR_H
     #endif
 
   #endif
 
   // Write 32 bits to TFT
-  #define tft_Write_32(C) GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 24)); WR_H; \
-                          GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 16)); WR_H; \
-                          GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >>  8)); WR_H; \
-                          GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >>  0)); WR_H
+  #define tft_Write_32(C) GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 24)); \
+                          GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >> 24)); WR_H; \
+                          GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 16)); \
+                          GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >> 16)); WR_H; \
+                          GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >>  8)); \
+                          GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >>  8)); WR_H; \
+                          GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >>  0)); \
+                          GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >>  0)); WR_H
 
   // Write two concatenated 16-bit values to TFT
-  #define tft_Write_32C(C,D) GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 8)); WR_H; \
-                             GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 0)); WR_H; \
-                             GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((D) >> 8)); WR_H; \
-                             GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((D) >> 0)); WR_H
+  #define tft_Write_32C(C,D) GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 8));  \
+                             GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >> 8)); WR_H; \
+                             GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 0)); \
+                             GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >> 0)); WR_H; \
+                             GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((D) >> 8)); \
+                             GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((D) >> 8)); WR_H; \
+                             GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((D) >> 0)); \
+                             GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((D) >> 0)); WR_H;
 
   // Write 16-bit value twice to TFT - used by drawPixel()
-  #define tft_Write_32D(C) GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 8)); WR_H; \
-                           GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 0)); WR_H; \
-                           GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 8)); WR_H; \
-                           GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 0)); WR_H
-
+  #define tft_Write_32D(C) GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 8)); \
+                           GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >> 8)); WR_H; \
+                           GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 0));  \
+                           GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >> 0)); WR_H; \ 
+                           GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 8));  \
+                           GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >> 8)); WR_H; \
+                           GPIO_CLR_REG = GPIO_OUT_CLR_MASK; GPIO_SET_REG = set_mask((uint8_t) ((C) >> 0)); \
+                           GPIO_CLR_REGH = GPIO_OUT_CLR_MASKH; GPIO_SET_REGH = set_maskh((uint8_t) ((C) >> 0)); WR_H
    // Read pin
   #ifdef TFT_RD
     #if (TFT_RD >= 32)
